@@ -1,0 +1,481 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Conveyor Control</title>
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Barlow:wght@300;400;600;700&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg:       #0d0f0e;
+    --surface:  #141716;
+    --border:   #232825;
+    --accent:   #b8f55a;
+    --accent2:  #5af5b8;
+    --danger:   #f55a5a;
+    --muted:    #4a5248;
+    --text:     #d4e0d0;
+    --mono:     'Share Tech Mono', monospace;
+    --sans:     'Barlow', sans-serif;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    background-image:
+      repeating-linear-gradient(0deg, transparent, transparent 39px, #1a1e1a 39px, #1a1e1a 40px),
+      repeating-linear-gradient(90deg, transparent, transparent 39px, #1a1e1a 39px, #1a1e1a 40px);
+  }
+
+  .panel {
+    width: 100%;
+    max-width: 480px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 2px;
+    overflow: hidden;
+  }
+
+  .panel-header {
+    border-bottom: 1px solid var(--border);
+    padding: 18px 24px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .panel-title {
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--accent);
+  }
+
+  .status-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: var(--muted);
+    transition: background 0.3s, box-shadow 0.3s;
+  }
+  .status-dot.online  { background: var(--accent);  box-shadow: 0 0 8px var(--accent); }
+  .status-dot.offline { background: var(--danger);  box-shadow: 0 0 8px var(--danger); }
+
+  .panel-body { padding: 32px 24px; }
+
+  /* ── Connection bar ── */
+  .conn-row {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 32px;
+  }
+  .conn-input {
+    flex: 1;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 2px;
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 12px;
+    padding: 10px 12px;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+  .conn-input:focus { border-color: var(--accent); }
+  .btn-connect {
+    background: transparent;
+    border: 1px solid var(--accent);
+    color: var(--accent);
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.1em;
+    padding: 10px 16px;
+    cursor: pointer;
+    border-radius: 2px;
+    transition: background 0.2s, color 0.2s;
+    white-space: nowrap;
+  }
+  .btn-connect:hover { background: var(--accent); color: var(--bg); }
+
+  /* ── Status line ── */
+  .status-line {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--muted);
+    margin-bottom: 32px;
+    min-height: 16px;
+    transition: color 0.3s;
+  }
+  .status-line.ok  { color: var(--accent); }
+  .status-line.err { color: var(--danger); }
+
+  /* ── Big power button ── */
+  .power-wrap {
+    display: flex;
+    justify-content: center;
+    margin-bottom: 40px;
+  }
+  .btn-power {
+    width: 120px; height: 120px;
+    border-radius: 50%;
+    border: 2px solid var(--border);
+    background: var(--bg);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: border-color 0.2s, box-shadow 0.2s;
+    position: relative;
+  }
+  .btn-power:hover { border-color: var(--accent); box-shadow: 0 0 24px #b8f55a22; }
+  .btn-power.running {
+    border-color: var(--accent);
+    box-shadow: 0 0 32px #b8f55a44;
+    animation: pulse 2s ease-in-out infinite;
+  }
+  .btn-power.running .power-icon { color: var(--accent); }
+  @keyframes pulse {
+    0%,100% { box-shadow: 0 0 32px #b8f55a44; }
+    50%      { box-shadow: 0 0 48px #b8f55a88; }
+  }
+  .power-icon {
+    color: var(--muted);
+    transition: color 0.3s;
+  }
+  .btn-power:disabled { opacity: 0.3; cursor: not-allowed; }
+
+  /* ── Speed section ── */
+  .section-label {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 12px;
+  }
+
+  .speed-row {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    margin-bottom: 8px;
+  }
+
+  input[type=range] {
+    -webkit-appearance: none;
+    flex: 1;
+    height: 3px;
+    background: var(--border);
+    border-radius: 2px;
+    outline: none;
+    cursor: pointer;
+  }
+  input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 16px; height: 16px;
+    border-radius: 50%;
+    background: var(--accent);
+    cursor: pointer;
+    box-shadow: 0 0 8px #b8f55a66;
+  }
+  input[type=range]::-moz-range-thumb {
+    width: 16px; height: 16px;
+    border-radius: 50%;
+    background: var(--accent);
+    border: none;
+    cursor: pointer;
+  }
+
+  .speed-val {
+    font-family: var(--mono);
+    font-size: 22px;
+    color: var(--accent);
+    min-width: 48px;
+    text-align: right;
+  }
+
+  .speed-ticks {
+    display: flex;
+    justify-content: space-between;
+    padding: 0 2px;
+    margin-bottom: 32px;
+  }
+  .speed-ticks span {
+    font-family: var(--mono);
+    font-size: 9px;
+    color: var(--muted);
+    letter-spacing: 0.05em;
+  }
+
+  /* ── Preset buttons ── */
+  .presets {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 8px;
+    margin-bottom: 32px;
+  }
+  .btn-preset {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 2px;
+    color: var(--muted);
+    font-family: var(--mono);
+    font-size: 11px;
+    padding: 8px 4px;
+    cursor: pointer;
+    transition: border-color 0.2s, color 0.2s;
+    text-align: center;
+  }
+  .btn-preset:hover { border-color: var(--accent2); color: var(--accent2); }
+  .btn-preset.active { border-color: var(--accent2); color: var(--accent2); background: #5af5b811; }
+
+  /* ── Log ── */
+  .log {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 2px;
+    padding: 12px;
+    height: 80px;
+    overflow-y: auto;
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--muted);
+    line-height: 1.7;
+  }
+  .log .entry { color: var(--text); }
+  .log .entry.ok  { color: var(--accent); }
+  .log .entry.err { color: var(--danger); }
+
+  /* ── Footer ── */
+  .panel-footer {
+    border-top: 1px solid var(--border);
+    padding: 12px 24px;
+    font-family: var(--mono);
+    font-size: 9px;
+    color: var(--muted);
+    letter-spacing: 0.1em;
+    display: flex;
+    justify-content: space-between;
+  }
+</style>
+</head>
+<body>
+
+<div class="panel">
+  <div class="panel-header">
+    <span class="panel-title">// conveyor control</span>
+    <div class="status-dot" id="dot"></div>
+  </div>
+
+  <div class="panel-body">
+
+    <!-- Connection -->
+    <div class="conn-row">
+      <input class="conn-input" id="wsUrl" type="text"
+             placeholder="your-app.up.railway.app"
+             value="relayserver-production-0b64.up.railway.app">
+      <button class="btn-connect" id="btnConnect" onclick="toggleConnect()">CONNECT</button>
+    </div>
+
+    <div class="status-line" id="statusLine">— not connected</div>
+
+    <!-- Power button -->
+    <div class="power-wrap">
+      <button class="btn-power" id="btnPower" onclick="toggleMotor()" disabled>
+        <svg class="power-icon" width="40" height="40" viewBox="0 0 24 24" fill="none"
+             stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 2v10"/>
+          <path d="M18.4 6.6a9 9 0 1 1-12.77 0"/>
+        </svg>
+      </button>
+    </div>
+
+    <!-- Speed -->
+    <div class="section-label">Speed</div>
+    <div class="speed-row">
+      <input type="range" id="speedSlider" min="0" max="255" value="128"
+             oninput="onSpeedInput(this.value)">
+      <span class="speed-val" id="speedVal">50%</span>
+    </div>
+    <div class="speed-ticks">
+      <span>0%</span><span>25%</span><span>50%</span><span>75%</span><span>100%</span>
+    </div>
+
+    <!-- Presets -->
+    <div class="section-label">Presets</div>
+    <div class="presets">
+      <button class="btn-preset" onclick="setPreset(64)">SLOW<br>25%</button>
+      <button class="btn-preset" onclick="setPreset(128)">MED<br>50%</button>
+      <button class="btn-preset" onclick="setPreset(192)">FAST<br>75%</button>
+      <button class="btn-preset" onclick="setPreset(255)">MAX<br>100%</button>
+    </div>
+
+    <!-- Log -->
+    <div class="log" id="log"></div>
+
+  </div>
+
+  <div class="panel-footer">
+    <span id="footerTime">--:--:--</span>
+    <span>ESP32 CONVEYOR v1.0</span>
+  </div>
+</div>
+
+<script>
+  let ws = null;
+  let running = false;
+  let speed = 128;
+  let esp32Online = false;
+  let sendTimer = null;
+
+  // ── Clock ──────────────────────────────────────────
+  setInterval(() => {
+    document.getElementById('footerTime').textContent =
+      new Date().toTimeString().slice(0,8);
+  }, 1000);
+
+  // ── Log ───────────────────────────────────────────
+  function log(msg, cls='') {
+    const el = document.getElementById('log');
+    const d = document.createElement('div');
+    d.className = 'entry ' + cls;
+    d.textContent = new Date().toTimeString().slice(0,8) + '  ' + msg;
+    el.appendChild(d);
+    el.scrollTop = el.scrollHeight;
+  }
+
+  // ── Status ────────────────────────────────────────
+  function setStatus(text, cls='') {
+    const el = document.getElementById('statusLine');
+    el.textContent = text;
+    el.className = 'status-line ' + cls;
+  }
+
+  function setDot(state) {
+    const d = document.getElementById('dot');
+    d.className = 'status-dot ' + state;
+  }
+
+  // ── Connect ───────────────────────────────────────
+  function toggleConnect() {
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      ws.close();
+      return;
+    }
+    const host = document.getElementById('wsUrl').value.trim();
+    if (!host) { setStatus('enter relay URL first', 'err'); return; }
+    const url = 'wss://' + host + '/ws';
+    setStatus('connecting…');
+    setDot('');
+    try { ws = new WebSocket(url); } catch(e) { setStatus('invalid URL', 'err'); return; }
+
+    ws.onopen = () => {
+      ws.send(JSON.stringify({ type: 'identify', role: 'browser' }));
+      document.getElementById('btnConnect').textContent = 'DISCONNECT';
+      setStatus('relay connected — waiting for ESP32', 'ok');
+      setDot('online');
+      log('relay connected', 'ok');
+    };
+
+    ws.onmessage = (e) => {
+      let data;
+      try { data = JSON.parse(e.data); } catch { return; }
+
+      if (data.type === 'esp32_status') {
+        esp32Online = data.online;
+        document.getElementById('btnPower').disabled = !esp32Online;
+        setDot(esp32Online ? 'online' : 'offline');
+        setStatus(esp32Online ? 'ESP32 online — ready' : 'relay connected — ESP32 offline',
+                  esp32Online ? 'ok' : 'err');
+        log('ESP32 ' + (esp32Online ? 'connected' : 'disconnected'),
+            esp32Online ? 'ok' : 'err');
+      }
+
+      if (data.type === 'ack') {
+        log('ack: ' + data.cmd, 'ok');
+      }
+
+      if (data.type === 'error') {
+        log('error: ' + data.msg, 'err');
+      }
+    };
+
+    ws.onclose = () => {
+      document.getElementById('btnConnect').textContent = 'CONNECT';
+      document.getElementById('btnPower').disabled = true;
+      setStatus('disconnected', 'err');
+      setDot('offline');
+      log('disconnected', 'err');
+      esp32Online = false;
+      running = false;
+      updatePowerBtn();
+    };
+
+    ws.onerror = () => {
+      setStatus('connection error', 'err');
+      log('websocket error', 'err');
+    };
+  }
+
+  // ── Motor toggle ──────────────────────────────────
+  function toggleMotor() {
+    if (!ws || ws.readyState !== WebSocket.OPEN) return;
+    running = !running;
+    updatePowerBtn();
+    const cmd = running
+      ? { cmd: 'start', speed: speed }
+      : { cmd: 'stop' };
+    ws.send(JSON.stringify(cmd));
+    log(running ? 'START speed=' + pct(speed) : 'STOP');
+  }
+
+  function updatePowerBtn() {
+    const btn = document.getElementById('btnPower');
+    btn.classList.toggle('running', running);
+  }
+
+  // ── Speed ─────────────────────────────────────────
+  function pct(v) { return Math.round(v / 255 * 100) + '%'; }
+
+  function onSpeedInput(v) {
+    speed = parseInt(v);
+    document.getElementById('speedVal').textContent = pct(speed);
+    // Debounce — send after 80ms idle
+    clearTimeout(sendTimer);
+    sendTimer = setTimeout(() => sendSpeed(), 80);
+    // Update preset highlights
+    document.querySelectorAll('.btn-preset').forEach(b => b.classList.remove('active'));
+    [64,128,192,255].forEach((val, i) => {
+      if (val === speed)
+        document.querySelectorAll('.btn-preset')[i].classList.add('active');
+    });
+  }
+
+  function sendSpeed() {
+    if (!ws || ws.readyState !== WebSocket.OPEN || !esp32Online) return;
+    ws.send(JSON.stringify({ cmd: 'speed', speed: speed }));
+    log('speed → ' + pct(speed));
+  }
+
+  function setPreset(val) {
+    speed = val;
+    document.getElementById('speedSlider').value = val;
+    document.getElementById('speedVal').textContent = pct(val);
+    document.querySelectorAll('.btn-preset').forEach(b => b.classList.remove('active'));
+    [64,128,192,255].forEach((v, i) => {
+      if (v === val) document.querySelectorAll('.btn-preset')[i].classList.add('active');
+    });
+    sendSpeed();
+  }
+</script>
+</body>
+</html>
