@@ -1,0 +1,15 @@
+{
+  "name": "conveyor-relay",
+  "version": "1.0.0",
+  "description": "WebSocket relay for ESP32 conveyor control",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "ws": "^8.16.0"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
